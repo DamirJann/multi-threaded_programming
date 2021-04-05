@@ -2,6 +2,7 @@
 #include <queue>
 #include <pthread.h>
 #include <fstream>
+#include<time.h>
 
 using namespace std;
 
@@ -147,8 +148,10 @@ void *consumer_routine(void *arg) {
         // end of CRITICAL ZONE
         pthread_mutex_unlock(&mutex);
 
-        struct timespec   ts = {0, rand()%sleep_time};
-        if (isDidTask) pthread_delay_np(&ts);
+        struct timespec   ts = { 0, rand()%sleep_time};
+        struct timespec tr{};
+        //        if (isDidTask) pthread_delay_np(&ts);
+        if (isDidTask) nanosleep(&ts, &tr);
     }
 
     return nullptr;
