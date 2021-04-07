@@ -4,11 +4,12 @@
 #include <fstream>
 #include <ctime>
 #include <memory>
+#include <atomic>
 
 using namespace std;
 
 int N;
-bool isTasksSupplied = false;
+atomic_bool isTasksSupplied(false);
 int waitingThreadsCount = 0;
 int max_sleep_time;
 bool isDebugMode;
@@ -27,6 +28,16 @@ struct ConsumerStruct;
 struct ConsumerStruct{
     int sum = 0;
     queue<int>* taskQueue{};
+};
+
+class tmp{
+public:
+    tmp(){
+        cout << "I start";
+    }
+    ~tmp(){
+        cout << " i did";
+    }
 };
 
 void *producer_routine(void *arg) {
@@ -145,21 +156,9 @@ void *consumer_interruptor_routine(void *arg) {
 
     pthread_t* p_thread = (pthread_t *) arg;
 
-    while (true){
-        // start of CRITICAL ZONE
-        pthread_mutex_lock(&mutex);
-
+    while (!isTasksSupplied){
         // try to stop random thread
-
         pthread_cancel(*(p_thread + (rand()%N)));
-        // break if all tasks were did
-
-        if (isTasksSupplied){
-            pthread_mutex_unlock(&mutex);
-            break;
-        }
-        // end of CRITICAL ZONE
-        pthread_mutex_unlock(&mutex);
     }
 
     return nullptr;
@@ -180,10 +179,9 @@ int run_threads() {
         *(threadStruct+i) = ConsumerStruct{0, &taskQueue};
         pthread_create((consumer_thread+i), nullptr, consumer_routine, (void *) (threadStruct+i));
     }
+
     // start interrupter
     pthread_create(&interrupted_thread, nullptr, consumer_interruptor_routine, (void *) consumer_thread);
-
-
     //end interrupter
     pthread_join(interrupted_thread, nullptr);
 
@@ -204,9 +202,9 @@ int run_threads() {
 // atomic function
 int get_tid() {
     static pthread_mutex_t mutexId;
+
     static int lastThreadId = 0;
-    // smart pointers doesn't work!
-    thread_local int* id = new int(-1);
+    thread_local unique_ptr<int> id = make_unique<int>(-1);
     pthread_mutex_lock(&mutexId);
 
     if (*id == -1){
@@ -227,6 +225,7 @@ void fill_file(int number_count){
 }
 
 int main(int argc, char** argv) {
+
     switch (argc) {
         case 4: {
             isDebugMode = true;
@@ -247,7 +246,7 @@ int main(int argc, char** argv) {
         }
     }
 
-//    fill_file(1000);
+//    fill_file(10000);
     pthread_cond_init(&consumer_cond, nullptr);
     pthread_cond_init(&producer_cond, nullptr);
 
