@@ -2,51 +2,35 @@
 #include <queue>
 #include <pthread.h>
 #include <fstream>
-#include<time.h>
+#include <ctime>
+#include <memory>
 
 using namespace std;
 
 int N;
 bool isTasksSupplied = false;
-bool isTasksDone = false;
 int waitingThreadsCount = 0;
-int sleep_time;
-static int lastThreadId = 0;
+int max_sleep_time;
 bool isDebugMode;
-static int doneTaskCount = 0;
 
-thread_local int id;
 pthread_cond_t consumer_cond, producer_cond;
 pthread_mutex_t mutex;
-pthread_mutex_t idMutex;
-pthread_mutex_t doneTaskCountMutex;
 
-
-void initialize_id();
 void *producer_routine(void *arg);
 void *consumer_routine(void *arg);
 void *consumer_interruptor_routine(void *arg);
 int run_threads();
 int get_tid();
 void fill_file();
-struct ThreadStruct;
+struct ConsumerStruct;
 
-
-void initialize_id(){
-    pthread_mutex_lock(&idMutex);
-    id = ++lastThreadId;
-    pthread_mutex_unlock(&idMutex);
-}
-
-struct ThreadStruct{
-    long long int sum = 0;
-    queue<int>* taskQueue;
+struct ConsumerStruct{
+    int sum = 0;
+    queue<int>* taskQueue{};
 };
 
 void *producer_routine(void *arg) {
 
-    //getting_id
-    initialize_id();
     queue<int>* taskQueue = ((queue<int>*) arg);
 
     // open stream to read data
@@ -101,10 +85,7 @@ void *producer_routine(void *arg) {
 
 void *consumer_routine(void *arg) {
 
-    // getting_id
-    initialize_id();
-
-    ThreadStruct* threadStruct = (ThreadStruct*) arg;
+    ConsumerStruct* threadStruct = (ConsumerStruct*) arg;
 
     while (true) {
         bool isDidTask = false;
@@ -115,7 +96,6 @@ void *consumer_routine(void *arg) {
         // if task
         // wait until producer wake up thread and
         if (threadStruct->taskQueue->empty() && !isTasksSupplied) {
-
             pthread_cond_signal(&producer_cond);
             waitingThreadsCount++;
             pthread_cond_wait(&consumer_cond, &mutex);
@@ -128,7 +108,6 @@ void *consumer_routine(void *arg) {
             int number = threadStruct->taskQueue->front();
             threadStruct->sum += number;
             threadStruct->taskQueue->pop();
-            doneTaskCount++;
             isDidTask = true;
             if (isDebugMode) {
                 cout << "(" << get_tid() << ", " << threadStruct->sum << ")" << endl ;
@@ -136,9 +115,8 @@ void *consumer_routine(void *arg) {
             // otherwise check weather consumers have done all tasks
         }
 
-        isTasksDone = isTasksSupplied && threadStruct->taskQueue->empty();
-
-        if (isTasksDone) {
+        // if all tasks are done
+        if (isTasksSupplied && threadStruct->taskQueue->empty()) {
             // unlock mutex
             // end of CRITICAL ZONE
             pthread_mutex_unlock(&mutex);
@@ -148,10 +126,14 @@ void *consumer_routine(void *arg) {
         // end of CRITICAL ZONE
         pthread_mutex_unlock(&mutex);
 
-        struct timespec   ts = { 0, rand()%sleep_time};
-        struct timespec tr{};
-        //        if (isDidTask) pthread_delay_np(&ts);
-        if (isDidTask) nanosleep(&ts, &tr);
+        // make thread sleep
+        if (isDidTask && max_sleep_time != 0) {
+            int sleepTime = rand() % max_sleep_time + 1;
+            // 1 milisecond = 10^6 nanosecond
+            struct timespec   ts = {0, sleepTime * 1'000'000};
+            struct timespec tr{};
+            nanosleep(&ts, &tr);
+        }
     }
 
     return nullptr;
@@ -161,20 +143,18 @@ void *consumer_routine(void *arg) {
 
 void *consumer_interruptor_routine(void *arg) {
 
-    //getting_id
-    initialize_id();
-
-    auto* p_thread =  (vector<pthread_t> *) arg;
+    pthread_t* p_thread = (pthread_t *) arg;
 
     while (true){
         // start of CRITICAL ZONE
         pthread_mutex_lock(&mutex);
 
         // try to stop random thread
-        pthread_cancel(p_thread->at(rand()%N));
+
+        pthread_cancel(*(p_thread + (rand()%N)));
         // break if all tasks were did
 
-        if (isTasksDone){
+        if (isTasksSupplied){
             pthread_mutex_unlock(&mutex);
             break;
         }
@@ -189,39 +169,53 @@ int run_threads() {
     queue<int> taskQueue;
     pthread_t producer_thread;
     pthread_t interrupted_thread;
-    vector<pthread_t> consumer_thread(N);
-    vector<ThreadStruct> threadStruct(N);
-    long long int sum = 0;
+    ConsumerStruct* threadStruct = static_cast<ConsumerStruct *>(malloc(sizeof(ConsumerStruct) * (N)));
+    pthread_t* consumer_thread = static_cast<pthread_t *>(malloc(sizeof(pthread_t) * (N)));
+    int sum = 0;
+
     // start producer
     pthread_create(&producer_thread, nullptr, producer_routine, (void *) &taskQueue);
 //     start consumers
     for (int i = 0; i < N; i++) {
-        consumer_thread[i] = pthread_t();
-        threadStruct[i] = (ThreadStruct{0, &taskQueue});
-        pthread_create(&consumer_thread[i], nullptr, consumer_routine, (void *) &(threadStruct.at(i)));
+        *(threadStruct+i) = ConsumerStruct{0, &taskQueue};
+        pthread_create((consumer_thread+i), nullptr, consumer_routine, (void *) (threadStruct+i));
     }
     // start interrupter
-    pthread_create(&interrupted_thread, nullptr, consumer_interruptor_routine, (void *) (&consumer_thread));
+    pthread_create(&interrupted_thread, nullptr, consumer_interruptor_routine, (void *) consumer_thread);
+
+
+    //end interrupter
+    pthread_join(interrupted_thread, nullptr);
 
     // end consumer
     for (int i = 0; i < N; i++) {
-        pthread_join(consumer_thread[i], nullptr);
-        sum += threadStruct[i].sum;
+        pthread_join(*(consumer_thread+i), nullptr);
+        sum += (*(threadStruct+i)).sum;
     }
 
     // end producer
     pthread_join(producer_thread, nullptr);
 
-    //end interrupter
-    pthread_join(interrupted_thread, nullptr);
-
-
+    delete [] consumer_thread;
+    delete [] threadStruct;
     return sum;
 }
 
-
+// atomic function
 int get_tid() {
-    return id;
+    static pthread_mutex_t mutexId;
+    static int lastThreadId = 0;
+    // smart pointers doesn't work!
+    thread_local int* id = new int(-1);
+    pthread_mutex_lock(&mutexId);
+
+    if (*id == -1){
+        *id = ++lastThreadId;
+    }
+
+    pthread_mutex_unlock(&mutexId);
+
+    return *id;
 }
 
 void fill_file(int number_count){
@@ -234,21 +228,21 @@ void fill_file(int number_count){
 
 int main(int argc, char** argv) {
     switch (argc) {
-        case 4:{
+        case 4: {
             isDebugMode = true;
             N = stoi(string(argv[2]));
-            sleep_time = stoi(string(argv[3]));
+            max_sleep_time = stoi(string(argv[3]));
             break;
         }
-        case 3:{
+        case 3: {
             isDebugMode = false;
             N = stoi(string(argv[1]));
-            sleep_time = stoi(string(argv[2]));
+            max_sleep_time = stoi(string(argv[2]));
             break;
         }
-        default:{
+        default: {
             N = 1000;
-            sleep_time = 1000;
+            max_sleep_time = 1000;
             break;
         }
     }
@@ -257,9 +251,6 @@ int main(int argc, char** argv) {
     pthread_cond_init(&consumer_cond, nullptr);
     pthread_cond_init(&producer_cond, nullptr);
 
-    int anw = run_threads();
-    clog << "Sum, which was calculated by threads is " << anw << endl;
-
+    cout << run_threads() << endl;
     return 0;
 }
-
