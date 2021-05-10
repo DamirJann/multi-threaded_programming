@@ -1,0 +1,20 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/damir/Desktop/multi-threaded_programming/lab3/sanitizer.cpp
+iostream
+-
+vector
+-
+map
+-
+set
+-
+unistd.h
+-
+

@@ -1,13 +1,14 @@
 #include <iostream>
 #include <vector>
 using namespace std;
-
 const int N = 100;
 enum Colors {
     WHITE,
     BLACK,
     GREY
 };
+
+
 
 class Node{
 public:
@@ -40,7 +41,7 @@ bool isCycle(Node* startNode){
                 node->color = GREY;
                 if (isCycle(node)) return true;
         }
-        else if (node->color == BLACK){
+        else if (node->color == GREY){
             return true;
         }
     }
@@ -53,12 +54,10 @@ int main() {
 
     Node n1(1), n2(2), n3(3), n4(4), n5(5);
     n1.link(&n2);
-    n1.link(&n3);
-    n5.link(&n1);
-    n3.link(&n4);
-    n4.link(&n1);
-    cout << "Is there cycle: " << (isCycle(&n1) ? "YES" : "NO");
+    n2.link(&n3);
+    n3.link(&n5);
 
-
+    cout << "Is there cycle: " << (isCycle(&n1) ? "YES" : "NO") << endl;
     return 0;
 }
+
