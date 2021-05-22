@@ -1,1 +1,0 @@
-/usr/bin/c++ -pthread -g CMakeFiles/lab3.dir/main.cpp.o -o lab3  -Wl,-rpath,/home/damir/Desktop/multi-threaded_programming/lab3/cmake-build-debug libsanitizer.so 

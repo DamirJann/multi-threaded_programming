@@ -1,1 +1,0 @@
-/usr/bin/c++ -fPIC -pthread -g -shared -Wl,-soname,libsanitizer.so -o libsanitizer.so CMakeFiles/sanitizer.dir/sanitizer.cpp.o 

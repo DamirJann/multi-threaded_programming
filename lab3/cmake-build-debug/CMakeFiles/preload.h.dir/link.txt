@@ -1,2 +1,0 @@
-/usr/bin/ar qc libpreload.h.a CMakeFiles/preload.h.dir/preload.cpp.o
-/usr/bin/ranlib libpreload.h.a
