@@ -1,4 +1,0 @@
-/home/damir/Desktop/multi-threaded_programming/lab3/test/cmake-build-debug/CMakeFiles/rebuild_cache.dir
-/home/damir/Desktop/multi-threaded_programming/lab3/test/cmake-build-debug/CMakeFiles/edit_cache.dir
-/home/damir/Desktop/multi-threaded_programming/lab3/test/cmake-build-debug/CMakeFiles/test.dir
-/home/damir/Desktop/multi-threaded_programming/lab3/test/cmake-build-debug/CMakeFiles/sanitizer.dir
