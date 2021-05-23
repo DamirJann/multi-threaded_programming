@@ -5,13 +5,9 @@
 #include <dlfcn.h>
 #include <algorithm>
 #include <set>
+#include <memory>
 
 class Mutex_graph {
-public:
-    Mutex_graph() {
-        graph_nodes.reserve(1000000);
-    }
-
 private:
     enum Colors {
         WHITE,
@@ -21,18 +17,19 @@ private:
 
     struct Graph_node {
         Graph_node(const pthread_mutex_t *__mutex) : __mutex(__mutex), color(WHITE) {}
+
         const pthread_mutex_t *__mutex;
         Colors color;
-        std::set<Graph_node *> connected_nodes;
+        std::set<std::unique_ptr<Graph_node>> connected_nodes;
     };
 
-    std::vector<Graph_node> graph_nodes;
+    std::vector<std::unique_ptr<Graph_node>> graph_nodes;
 
-    bool dfs_find_cycle(Graph_node *start_node) {
-        for (Graph_node *node: start_node->connected_nodes) {
+    bool dfs_find_cycle(std::unique_ptr<Graph_node>& start_node) {
+        for (auto &node: start_node->connected_nodes) {
             if (node->color == WHITE) {
                 node->color = GREY;
-                if (dfs_find_cycle(node)) return true;
+                if (dfs_find_cycle(const_cast<std::unique_ptr<Graph_node> &>(node))) return true;
             } else if (node->color == GREY) {
                 return true;
             }
@@ -41,10 +38,10 @@ private:
         return false;
     }
 
-    Graph_node *find_by(const pthread_mutex_t *__mutex) {
-        for (auto &node: graph_nodes) {
-            if (node.__mutex == __mutex) {
-                return &node;
+    std::unique_ptr<Graph_node> find_by(const pthread_mutex_t *__mutex) {
+        for (auto &graph_node : graph_nodes) {
+            if (graph_node->__mutex == __mutex) {
+                return std::move(graph_node);
             }
         }
         return nullptr;
@@ -54,7 +51,7 @@ public:
     bool is_cycle() {
         clear_nodes();
         for (auto &graph_node : graph_nodes) {
-            if (dfs_find_cycle(&graph_node)) {
+            if (dfs_find_cycle(const_cast<std::unique_ptr<Graph_node> &>(graph_node))) {
                 return true;
             }
         }
@@ -63,22 +60,23 @@ public:
 
     void clear_nodes() {
         for (auto &graph_node : graph_nodes) {
-            graph_node.color = WHITE;
+            graph_node->color = WHITE;
         }
     }
 
 
     bool add_node(const pthread_mutex_t *__mutex) {
         if (find_by(__mutex) == nullptr) {
-            graph_nodes.push_back(__mutex);
+            std::unique_ptr<Graph_node> node = std::make_unique<Graph_node>(Graph_node(__mutex));
+            graph_nodes.push_back(std::move(node));
         }
         return true;
     }
 
     void connect(const pthread_mutex_t *from, const pthread_mutex_t *to) {
-        Graph_node *from_node = find_by(from);
-        Graph_node *to_node = find_by(to);
-        from_node->connected_nodes.insert(to_node);
+        std::unique_ptr<Graph_node> from_node = find_by(from);
+        std::unique_ptr<Graph_node> to_node = find_by(to);
+        from_node->connected_nodes.insert(std::move(to_node));
     }
 
 };
@@ -86,20 +84,10 @@ public:
 
 extern "C" {
 int (*orig_mutex_lock)(pthread_mutex_t *__mutex) = (int (*)(pthread_mutex_t *)) dlsym(RTLD_NEXT, "pthread_mutex_lock");
-int
-(*orig_mutex_unlock)(pthread_mutex_t *__mutex) = (int (*)(pthread_mutex_t *)) dlsym(RTLD_NEXT, "pthread_mutex_unlock");
-
+int (*orig_mutex_unlock)(pthread_mutex_t *__mutex) = (int (*)(pthread_mutex_t *)) dlsym(RTLD_NEXT, "pthread_mutex_unlock");
 Mutex_graph graph;
-pthread_mutex_t sanitizer_mut;
+pthread_mutex_t sanitizer_mut = PTHREAD_MUTEX_INITIALIZER;
 thread_local std::vector<pthread_mutex_t *> locked_mutex;
-
-class Init {
-public:
-    Init() {
-        pthread_mutex_init(&sanitizer_mut, nullptr);
-    }
-};
-Init init;
 
 int pthread_mutex_lock(pthread_mutex_t *__mutex) {
     (*orig_mutex_lock)(&sanitizer_mut);
@@ -109,12 +97,13 @@ int pthread_mutex_lock(pthread_mutex_t *__mutex) {
         pthread_mutex_t *last_locked_mutex = __mutex;
         graph.connect(pre_last_locked_mutex, last_locked_mutex);
     }
-    if (graph.is_cycle()) exit(1);
+    if (graph.is_cycle()) exit(EXIT_FAILURE);
     locked_mutex.push_back(__mutex);
     (*orig_mutex_unlock)(&sanitizer_mut);
 
     return (*orig_mutex_lock)(__mutex);
 }
+
 int pthread_mutex_unlock(pthread_mutex_t *__mutex) {
     (*orig_mutex_lock)(&sanitizer_mut);
     locked_mutex.erase(std::remove(locked_mutex.begin(), locked_mutex.end(), __mutex), locked_mutex.end());
