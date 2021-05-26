@@ -71,32 +71,30 @@ class SafeSet<T extends Comparable<T>> implements Set<T> {
     @Override
     public boolean add(T value) {
         Node cur = head;
-        while (cur.isStart() && cur.nextNode != null && cur.value.compareTo(value) < 0) {
-            cur = head.nextNode;
+            while (cur.nextNode != null && cur.nextNode.value.compareTo(value) < 0) {
+                cur = cur.nextNode;
+
         }
 
-
-        if (!cur.isStart() && cur.value.compareTo(value) == 0){
+        if (cur.nextNode != null && cur.nextNode.value.compareTo(value) == 0){
+            return false;
+        } else {
             Node nextNode = cur.nextNode;
             cur.nextNode = new Node(value);
             cur.nextNode.nextNode = nextNode;
             return true;
-        } else {
-            return false;
         }
     }
 
     @Override
     public boolean remove(T value) {
         Node cur = head;
-        while (cur != null && cur.nextNode != null && cur.nextNode.value.compareTo(value) < 0) {
-            cur = head.nextNode;
+        while (cur.nextNode != null && cur.nextNode.value.compareTo(value) != 0) {
+            cur = cur.nextNode;
         }
-        if (cur != null && cur.nextNode != null && cur.nextNode.value.compareTo(value) == 0) {
+
+        if (cur.nextNode != null && cur.nextNode.value.compareTo(value) == 0) {
             cur.nextNode = cur.nextNode.nextNode;
-            return true;
-        } else if (cur != null && cur.value.compareTo(value) == 0) {
-            head = null;
             return true;
         } else {
             return false;
@@ -108,10 +106,10 @@ class SafeSet<T extends Comparable<T>> implements Set<T> {
     @Override
     public boolean contains(T value) {
         Node cur = head;
-        while (cur != null && cur.nextNode != null && cur.value.compareTo(value) < 0) {
-            cur = head.nextNode;
+        while (cur.nextNode != null && cur.nextNode.value.compareTo(value) < 0) {
+            cur = cur.nextNode;
         }
-        if (cur != null && cur.nextNode.value.compareTo(value) == 0) {
+        if (cur.nextNode != null && cur.nextNode.value.compareTo(value) == 0) {
             return true;
         } else {
             return false;
@@ -120,12 +118,12 @@ class SafeSet<T extends Comparable<T>> implements Set<T> {
 
     @Override
     public boolean isEmpty() {
-        return (head != null && head.value == null);
+        return (head.nextNode == null);
     }
 
     public String getElements() {
         StringBuilder str = new StringBuilder();
-        Node cur = head;
+        Node cur = head.nextNode;
         while (cur != null) {
             str.append(cur.value.toString()).append(" ");
             cur = cur.nextNode;
