@@ -1,45 +1,8 @@
 package com.pilacis;
 
+import com.pilacis.SafeSet;
 import org.junit.Assert;
 import org.junit.Test;
-
-class TestThread1 extends Thread {
-    private SafeSet<Integer> set;
-
-    public TestThread1(SafeSet<Integer> set) {
-        this.set = set;
-    }
-
-    public void run() {
-        System.out.println(set);
-        for (int i = 10; i < 500000000; i++) {
-            try {
-                sleep(1);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-            set.add(i);
-        }
-        for (int i = 20; i < 500000000; i++) {
-            set.remove(i);
-        }
-    }
-}
-
-class TestThread2 extends Thread {
-    private final SafeSet set;
-
-    public TestThread2(SafeSet set) {
-        this.set = set;
-    }
-
-    public void run() {
-        for (int i = 0; i < 50000000; i++) {
-            set.add(i);
-        }
-    }
-}
-
 
 public class SafeSetTest {
     @Test

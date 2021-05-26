@@ -57,33 +57,34 @@ class SafeSet<T extends Comparable<T>> implements Set<T> {
             this.value = value;
             nextNode = null;
         }
-
         T value;
         Node nextNode;
 
-        boolean isStart(){
-            return value == null;
-        }
     }
 
     Node head = new Node(null);
 
     @Override
     public boolean add(T value) {
+
         Node cur = head;
-            while (cur.nextNode != null && cur.nextNode.value.compareTo(value) < 0) {
-                cur = cur.nextNode;
+
+        while (cur.nextNode != null && cur.nextNode.value.compareTo(value) < 0) {
+            cur = cur.nextNode;
 
         }
 
-        if (cur.nextNode != null && cur.nextNode.value.compareTo(value) == 0){
+        if (cur.nextNode != null && cur.nextNode.value.compareTo(value) == 0) {
             return false;
         } else {
-            Node nextNode = cur.nextNode;
-            cur.nextNode = new Node(value);
-            cur.nextNode.nextNode = nextNode;
+
+            Node newNode = new Node(value);
+            newNode.nextNode = cur.nextNode;
+            cur.nextNode = newNode;
             return true;
         }
+
+
     }
 
     @Override
@@ -100,7 +101,6 @@ class SafeSet<T extends Comparable<T>> implements Set<T> {
             return false;
         }
     }
-
 
 
     @Override
