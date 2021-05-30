@@ -67,6 +67,19 @@ class SafeSet<T extends Comparable<T>> implements Set<T> {
         boolean isNotLast() {
             return this.nextNode.nextNode != null;
         }
+
+        int compareTo(Node<T> node){
+            if ((this.value == null && this.nextNode != null) || (node.value == null && node.nextNode == null)){
+                return -1;
+            }
+            else if ((this.value == null && this.nextNode == null) || (node.value == null && node.nextNode != null)){
+                return 1;
+            }
+            {
+                return this.value.compareTo(node.value);
+            }
+
+        }
     }
 
     SafeSet() {
@@ -76,71 +89,112 @@ class SafeSet<T extends Comparable<T>> implements Set<T> {
 
     Node<T> head;
 
-    public Node<T> find(T value) {
-        Node<T> previousNode = head;
-        head.lock.lock();
-        Node<T> cur = head.nextNode;
-        cur.lock.lock();
-
-        while (previousNode.isNotLast() && cur.value.compareTo(value) < 0) {
-            cur.nextNode.lock.lock();
-            previousNode.lock.unlock();
-
-            previousNode = cur;
-            cur = cur.nextNode;
-
+    private Node<T> find(T value){
+        Node<T> previous = head;
+        Node<T> current = head.nextNode;
+        while (previous.isNotLast() && current.value.compareTo(value) < 0) {
+            previous = current;
+            current = current.nextNode;
         }
-
-        return previousNode;
+        return previous;
     }
 
     @Override
     public boolean add(T value) {
+        do {
+            Node<T> previous = find(value);
+            Node<T> current = previous.nextNode;
 
-        Node<T> cur = find(value);
+            previous.lock.lock();
+            current.lock.lock();
 
-        if (cur.isNotLast() && cur.nextNode.value.compareTo(value) == 0) {
-            cur.nextNode.lock.unlock();
-            cur.lock.unlock();
-            return false;
-        } else {
-            Node<T> newNode = new Node<>(value);
-            newNode.nextNode = cur.nextNode;
-            cur.nextNode = newNode;
-            newNode.nextNode.lock.unlock();
-            cur.lock.unlock();
-            return true;
-        }
+            if (validate(previous, current)) {
+                if (previous.isNotLast() && current.value.compareTo(value) == 0) {
+                    previous.lock.unlock();
+                    current.lock.unlock();
+                    return false;
+                } else {
+                    Node<T> newNode = new Node<>(value);
+                    newNode.nextNode = current;
+                    previous.nextNode = newNode;
+                    previous.lock.unlock();
+                    current.lock.unlock();
+                    return true;
+                }
+            } else {
+                current.lock.unlock();
+                previous.lock.unlock();
+            }
+
+        } while (true);
+
+
     }
 
     @Override
     public boolean remove(T value) {
-        Node<T> cur = find(value);
+        do {
+            Node<T> previous = find(value);
+            Node<T> current = previous.nextNode;
 
-        if (cur.isNotLast() && cur.nextNode.value.compareTo(value) == 0) {
-            cur.nextNode.lock.unlock();
-            cur.nextNode = cur.nextNode.nextNode;
-            cur.lock.unlock();
-            return true;
-        } else {
-            cur.lock.unlock();
-            cur.nextNode.lock.unlock();
-            return false;
-        }
+            previous.lock.lock();
+            current.lock.lock();
+
+            if (validate(previous, current)) {
+                if (previous.isNotLast() && current.value.compareTo(value) == 0) {
+                    previous.nextNode = current.nextNode;
+                    previous.lock.unlock();
+                    current.lock.unlock();
+                    return true;
+                } else {
+                    previous.lock.unlock();
+                    current.lock.unlock();
+                    return false;
+                }
+            } else {
+                current.lock.unlock();
+                previous.lock.unlock();
+            }
+
+        } while (true);
+
     }
 
 
     @Override
     public boolean contains(T value) {
-        Node<T> cur = find(value);
+        do {
+            Node<T> previous = find(value);
+            Node<T> current = previous.nextNode;
 
-        boolean result = (cur.isNotLast() && cur.nextNode.value.compareTo(value) == 0);
+            previous.lock.lock();
+            current.lock.lock();
 
-        cur.nextNode.lock.unlock();
-        cur.lock.unlock();
+            if (validate(previous, current)) {
+                boolean result = previous.isNotLast() && current.value.compareTo(value) == 0;
+                previous.lock.unlock();
+                current.lock.unlock();
+                return result;
+            } else {
+                previous.lock.unlock();
+                current.lock.unlock();
+            }
+        } while (true);
 
-        return result;
     }
+
+    public boolean validate(Node<T> previous, Node<T> current) {
+        Node<T> previousNode = head;
+        Node<T> currentNode = head.nextNode;
+        while (previousNode.isNotLast() && (currentNode.compareTo(current) < 0)){
+            previousNode = currentNode;
+            currentNode = currentNode.nextNode;
+        }
+
+
+        return (previous == previousNode && current == currentNode);
+    }
+
 
     @Override
     public boolean isEmpty() {
@@ -149,10 +203,10 @@ class SafeSet<T extends Comparable<T>> implements Set<T> {
 
     public String getElements() {
         StringBuilder str = new StringBuilder();
-        Node<T> cur = head.nextNode;
-        while (cur.value != null) {
-            str.append(cur.value.toString()).append(" ");
-            cur = cur.nextNode;
+        Node<T> current = head.nextNode;
+        while (current.value != null) {
+            str.append(current.value.toString()).append(" ");
+            current = current.nextNode;
         }
         return str.toString();
     }
