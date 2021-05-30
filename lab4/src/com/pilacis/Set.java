@@ -1,6 +1,5 @@
 package com.pilacis;
 
-import java.util.ArrayList;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
@@ -63,27 +62,27 @@ class SafeSet<T extends Comparable<T>> implements Set<T> {
 
         T value;
         ReentrantLock lock;
-        Node nextNode;
+        Node<T> nextNode;
 
-        boolean isLast() {
-            return this.nextNode.nextNode == null;
+        boolean isNotLast() {
+            return this.nextNode.nextNode != null;
         }
     }
 
     SafeSet() {
-        head = new Node(null);
-        head.nextNode = new Node(null);
+        head = new Node<>(null);
+        head.nextNode = new Node<>(null);
     }
 
-    Node head;
+    Node<T> head;
 
     public Node<T> find(T value) {
-        Node previousNode = head;
+        Node<T> previousNode = head;
         head.lock.lock();
-        Node cur = head.nextNode;
+        Node<T> cur = head.nextNode;
         cur.lock.lock();
 
-        while (!previousNode.isLast() && cur.value.compareTo(value) < 0) {
+        while (previousNode.isNotLast() && cur.value.compareTo(value) < 0) {
             cur.nextNode.lock.lock();
             previousNode.lock.unlock();
 
@@ -98,14 +97,14 @@ class SafeSet<T extends Comparable<T>> implements Set<T> {
     @Override
     public boolean add(T value) {
 
-        Node cur = find(value);
+        Node<T> cur = find(value);
 
-        if (!cur.isLast() && cur.nextNode.value.compareTo(value) == 0) {
+        if (cur.isNotLast() && cur.nextNode.value.compareTo(value) == 0) {
             cur.nextNode.lock.unlock();
             cur.lock.unlock();
             return false;
         } else {
-            Node newNode = new Node(value);
+            Node<T> newNode = new Node<>(value);
             newNode.nextNode = cur.nextNode;
             cur.nextNode = newNode;
             newNode.nextNode.lock.unlock();
@@ -116,9 +115,9 @@ class SafeSet<T extends Comparable<T>> implements Set<T> {
 
     @Override
     public boolean remove(T value) {
-        Node cur = find(value);
+        Node<T> cur = find(value);
 
-        if (!cur.isLast() && cur.nextNode.value.compareTo(value) == 0) {
+        if (cur.isNotLast() && cur.nextNode.value.compareTo(value) == 0) {
             cur.nextNode.lock.unlock();
             cur.nextNode = cur.nextNode.nextNode;
             cur.lock.unlock();
@@ -133,9 +132,9 @@ class SafeSet<T extends Comparable<T>> implements Set<T> {
 
     @Override
     public boolean contains(T value) {
-        Node cur = find(value);
+        Node<T> cur = find(value);
 
-        boolean result = (!cur.isLast() && cur.nextNode.value.compareTo(value) == 0);
+        boolean result = (cur.isNotLast() && cur.nextNode.value.compareTo(value) == 0);
 
         cur.nextNode.lock.unlock();
         cur.lock.unlock();
@@ -150,7 +149,7 @@ class SafeSet<T extends Comparable<T>> implements Set<T> {
 
     public String getElements() {
         StringBuilder str = new StringBuilder();
-        Node cur = head.nextNode;
+        Node<T> cur = head.nextNode;
         while (cur.value != null) {
             str.append(cur.value.toString()).append(" ");
             cur = cur.nextNode;

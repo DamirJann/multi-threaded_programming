@@ -18,7 +18,8 @@ class TestThread1 extends Thread {
         Random random = new Random();
         for (int j = 0; j < 10; j++) {
             for (int i = 0; i < 5000; i++) {
-//                set.contains(random.nextInt(5000));
+                set.contains(random.nextInt(5000));
+                set.remove(i * j);
                 System.out.println("thr 1 " + i);
                 set.add(i);
             }
