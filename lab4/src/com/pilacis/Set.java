@@ -163,18 +163,7 @@ class SafeSet<T extends Comparable<T>> implements Set<T> {
             Node<T> previous = find(value);
             Node<T> current = previous.nextNode;
 
-            previous.lock.lock();
-            current.lock.lock();
-
-            if (validate(previous, current)) {
-                boolean result = previous.isNotLast() && current.value.compareTo(value) == 0;
-                previous.lock.unlock();
-                current.lock.unlock();
-                return result;
-            } else {
-                previous.lock.unlock();
-                current.lock.unlock();
-            }
+            return current.value.compareTo(value) == 0 && !current.marked;
         } while (true);
 
     }
