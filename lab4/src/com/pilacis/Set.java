@@ -78,24 +78,21 @@ class SafeSet<T extends Comparable<T>> implements Set<T> {
     Node head;
 
     public Node<T> find(T value) {
-        Node cur = head;
         Node previousNode = head;
-        previousNode.lock.lock();
-        do {
+        head.lock.lock();
+        Node cur = head.nextNode;
+        cur.lock.lock();
 
+        while (!previousNode.isLast() && cur.value.compareTo(value) < 0) {
             cur.nextNode.lock.lock();
-            if (cur.value != null) {
-                previousNode.lock.unlock();
-            }
-            previousNode = cur;
+            previousNode.lock.unlock();
 
-            if (cur.nextNode.nextNode != null && cur.nextNode.value.compareTo(value) < 0) {
-                cur = cur.nextNode;
-            } else {
-                break;
-            }
-        } while (true);
-        return cur;
+            previousNode = cur;
+            cur = cur.nextNode;
+
+        }
+
+        return previousNode;
     }
 
     @Override
