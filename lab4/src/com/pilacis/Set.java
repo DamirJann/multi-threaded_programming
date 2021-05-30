@@ -1,5 +1,6 @@
 package com.pilacis;
 
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
@@ -56,47 +57,56 @@ class SafeSet<T extends Comparable<T>> implements Set<T> {
     static class Node<T extends Comparable<T>> {
         Node(T value) {
             this.value = value;
-            marked = false;
             lock = new ReentrantLock();
-            nextNode = null;
+            nextAndMarked = new AtomicReference<>();
+            nextAndMarked.set(new NextAndMarked(null, false));
+        }
+
+        private static class NextAndMarked<T extends Comparable<T>>{
+            NextAndMarked(Node<T> next, boolean marked){
+                this.next = next;
+                this.marked = marked;
+            }
+            Node<T> next;
+            boolean marked;
+        }
+
+        void setMarked(boolean marked){
+            nextAndMarked.set(new NextAndMarked(nextAndMarked.get().next, marked));
+        }
+        boolean getMarked(){
+            return nextAndMarked.get().marked;
+        }
+        void setNext(Node<T> next){
+            nextAndMarked.set(new NextAndMarked(next, nextAndMarked.get().marked));
+        }
+        Node<T> getNext(){
+            return nextAndMarked.get().next;
         }
 
         T value;
         ReentrantLock lock;
-        Node<T> nextNode;
-        boolean marked;
+        AtomicReference<NextAndMarked> nextAndMarked;
 
         boolean isNotLast() {
-            return this.nextNode.nextNode != null;
+            return this.getNext().getNext() != null;
         }
 
-        int compareTo(Node<T> node){
-            if ((this.value == null && this.nextNode != null) || (node.value == null && node.nextNode == null)){
-                return -1;
-            }
-            else if ((this.value == null && this.nextNode == null) || (node.value == null && node.nextNode != null)){
-                return 1;
-            }
-            {
-                return this.value.compareTo(node.value);
-            }
-
-        }
     }
 
     SafeSet() {
         head = new Node<>(null);
-        head.nextNode = new Node<>(null);
+        head.setNext(new Node<>(null));
     }
 
     Node<T> head;
 
-    private Node<T> find(T value){
+    private Node<T> find(T value) {
         Node<T> previous = head;
-        Node<T> current = head.nextNode;
+        Node<T> current = head.getNext();
         while (previous.isNotLast() && current.value.compareTo(value) < 0) {
             previous = current;
-            current = current.nextNode;
+            current = current.getNext();
         }
         return previous;
     }
@@ -105,7 +115,7 @@ class SafeSet<T extends Comparable<T>> implements Set<T> {
     public boolean add(T value) {
         do {
             Node<T> previous = find(value);
-            Node<T> current = previous.nextNode;
+            Node<T> current = previous.getNext();
 
             previous.lock.lock();
             current.lock.lock();
@@ -117,8 +127,8 @@ class SafeSet<T extends Comparable<T>> implements Set<T> {
                     return false;
                 } else {
                     Node<T> newNode = new Node<>(value);
-                    newNode.nextNode = current;
-                    previous.nextNode = newNode;
+                    newNode.setNext(current);
+                    previous.setNext(newNode);
                     previous.lock.unlock();
                     current.lock.unlock();
                     return true;
@@ -137,12 +147,13 @@ class SafeSet<T extends Comparable<T>> implements Set<T> {
     public boolean remove(T value) {
         do {
             Node<T> previous = find(value);
-            Node<T> current = previous.nextNode;
+            Node<T> current = previous.getNext();
 
             if (validate(previous, current)) {
                 if (previous.isNotLast() && current.value.compareTo(value) == 0) {
-                    current.marked = true;
-                    previous.nextNode = current.nextNode;
+                    current.setMarked(true);
+                    previous.setNext(current.getNext());
+                    previous.nextAndMarked.compareAndSet(new Node.NextAndMarked<>(current, false), new Node.NextAndMarked<>(current.getNext(), false));
                     return true;
                 } else {
                     return false;
@@ -160,26 +171,26 @@ class SafeSet<T extends Comparable<T>> implements Set<T> {
     @Override
     public boolean contains(T value) {
         Node<T> previous = find(value);
-        Node<T> current = previous.nextNode;
-        return current.value.compareTo(value) == 0 && !current.marked;
+        Node<T> current = previous.getNext();
+        return previous.isNotLast() && current.value.compareTo(value) == 0 && !current.getMarked();
     }
 
     public boolean validate(Node<T> previous, Node<T> current) {
-        return (previous.nextNode == current && !previous.marked && !current.marked);
+        return (previous.getNext() == current && !previous.getMarked() && !current.getMarked());
     }
 
 
     @Override
     public boolean isEmpty() {
-        return head.nextNode.value == null;
+        return head.getNext().value == null;
     }
 
     public String getElements() {
         StringBuilder str = new StringBuilder();
-        Node<T> current = head.nextNode;
+        Node<T> current = head.getNext();
         while (current.value != null) {
             str.append(current.value.toString()).append(" ");
-            current = current.nextNode;
+            current = current.getNext();
         }
         return str.toString();
     }
