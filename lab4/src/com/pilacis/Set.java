@@ -159,13 +159,9 @@ class SafeSet<T extends Comparable<T>> implements Set<T> {
 
     @Override
     public boolean contains(T value) {
-        do {
-            Node<T> previous = find(value);
-            Node<T> current = previous.nextNode;
-
-            return current.value.compareTo(value) == 0 && !current.marked;
-        } while (true);
-
+        Node<T> previous = find(value);
+        Node<T> current = previous.nextNode;
+        return current.value.compareTo(value) == 0 && !current.marked;
     }
 
     public boolean validate(Node<T> previous, Node<T> current) {
