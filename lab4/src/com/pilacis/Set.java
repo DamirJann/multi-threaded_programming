@@ -1,6 +1,7 @@
 package com.pilacis;
 
 import java.util.ArrayList;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * Lock-Free множество.
@@ -52,50 +53,84 @@ public interface Set<T extends Comparable<T>> {
 
 class SafeSet<T extends Comparable<T>> implements Set<T> {
 
+
     static class Node<T extends Comparable<T>> {
         Node(T value) {
             this.value = value;
+            lock = new ReentrantLock();
             nextNode = null;
         }
-        T value;
-        Node nextNode;
 
+        T value;
+        ReentrantLock lock;
+        Node nextNode;
     }
 
-    Node head = new Node(null);
+    SafeSet() {
+        head = new Node(null);
+        head.nextNode = new Node(null);
+    }
+
+    Node head;
+
 
     @Override
     public boolean add(T value) {
-
         Node cur = head;
+        Node previousNode = head;
+        previousNode.lock.lock();
+        do {
+            cur.nextNode.lock.lock();
+            if (cur.value != null) {
+                previousNode.lock.unlock();
+            }
+            previousNode = cur;
 
-        while (cur.nextNode != null && cur.nextNode.value.compareTo(value) < 0) {
-            cur = cur.nextNode;
+            if (cur.nextNode.nextNode != null && cur.nextNode.value.compareTo(value) < 0) {
+                cur = cur.nextNode;
+                cur.nextNode.lock.lock();
+            } else {
+                break;
+            }
+        } while (true);
 
-        }
-
-        if (cur.nextNode != null && cur.nextNode.value.compareTo(value) == 0) {
+        if (cur.nextNode.value != null && cur.nextNode.value.compareTo(value) == 0) {
+            cur.nextNode.lock.unlock();
+            cur.lock.unlock();
             return false;
         } else {
-
             Node newNode = new Node(value);
             newNode.nextNode = cur.nextNode;
             cur.nextNode = newNode;
+            newNode.nextNode.lock.unlock();
+            cur.lock.unlock();
             return true;
         }
-
-
     }
 
     @Override
     public boolean remove(T value) {
         Node cur = head;
-        while (cur.nextNode != null && cur.nextNode.value.compareTo(value) != 0) {
-            cur = cur.nextNode;
-        }
+        Node previousNode = head;
+        previousNode.lock.lock();
+        do {
 
-        if (cur.nextNode != null && cur.nextNode.value.compareTo(value) == 0) {
+            cur.nextNode.lock.lock();
+            if (cur.value != null) {
+                previousNode.lock.unlock();
+            }
+            previousNode = cur;
+
+            if (cur.nextNode.nextNode != null && cur.nextNode.value.compareTo(value) < 0) {
+                cur = cur.nextNode;
+            } else {
+                break;
+            }
+        } while (true);
+
+        if (cur.nextNode.value != null && cur.nextNode.value.compareTo(value) == 0) {
             cur.nextNode = cur.nextNode.nextNode;
+            cur.lock.unlock();
             return true;
         } else {
             return false;
@@ -106,25 +141,35 @@ class SafeSet<T extends Comparable<T>> implements Set<T> {
     @Override
     public boolean contains(T value) {
         Node cur = head;
-        while (cur.nextNode != null && cur.nextNode.value.compareTo(value) < 0) {
-            cur = cur.nextNode;
-        }
-        if (cur.nextNode != null && cur.nextNode.value.compareTo(value) == 0) {
-            return true;
-        } else {
-            return false;
-        }
+        Node previousNode = head;
+        previousNode.lock.lock();
+        do {
+
+            cur.nextNode.lock.lock();
+            if (cur.value != null) {
+                previousNode.lock.unlock();
+            }
+            previousNode = cur;
+
+            if (cur.nextNode.nextNode != null && cur.nextNode.value.compareTo(value) < 0) {
+                cur = cur.nextNode;
+            } else {
+                break;
+            }
+        } while (true);
+
+        return (cur.nextNode.value != null && cur.nextNode.value.compareTo(value) == 0);
     }
 
     @Override
     public boolean isEmpty() {
-        return (head.nextNode == null);
+        return head.nextNode.value == null;
     }
 
     public String getElements() {
         StringBuilder str = new StringBuilder();
         Node cur = head.nextNode;
-        while (cur != null) {
+        while (cur.value != null) {
             str.append(cur.value.toString()).append(" ");
             cur = cur.nextNode;
         }

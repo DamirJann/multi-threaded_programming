@@ -42,7 +42,7 @@ public class SafeSetTest {
 
     @Test
     public void test4() throws InterruptedException {
-        String answer = "5 ";
+        String answer = "-43 5 55 ";
         SafeSet<Integer> set = new SafeSet<>();
         set.add(5);
         set.add(2);
@@ -54,6 +54,8 @@ public class SafeSetTest {
         set.remove(-4);
         Assert.assertTrue(set.isEmpty());
         set.add(5);
+        set.add(-43);
+        set.add(55);
         Assert.assertEquals(answer, set.getElements());
     }
 
