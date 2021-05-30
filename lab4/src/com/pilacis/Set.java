@@ -64,6 +64,10 @@ class SafeSet<T extends Comparable<T>> implements Set<T> {
         T value;
         ReentrantLock lock;
         Node nextNode;
+
+        boolean isLast() {
+            return this.nextNode.nextNode == null;
+        }
     }
 
     SafeSet() {
@@ -73,13 +77,12 @@ class SafeSet<T extends Comparable<T>> implements Set<T> {
 
     Node head;
 
-
-    @Override
-    public boolean add(T value) {
+    public Node<T> find(T value) {
         Node cur = head;
         Node previousNode = head;
         previousNode.lock.lock();
         do {
+
             cur.nextNode.lock.lock();
             if (cur.value != null) {
                 previousNode.lock.unlock();
@@ -88,13 +91,19 @@ class SafeSet<T extends Comparable<T>> implements Set<T> {
 
             if (cur.nextNode.nextNode != null && cur.nextNode.value.compareTo(value) < 0) {
                 cur = cur.nextNode;
-                cur.nextNode.lock.lock();
             } else {
                 break;
             }
         } while (true);
+        return cur;
+    }
 
-        if (cur.nextNode.value != null && cur.nextNode.value.compareTo(value) == 0) {
+    @Override
+    public boolean add(T value) {
+
+        Node cur = find(value);
+
+        if (!cur.isLast() && cur.nextNode.value.compareTo(value) == 0) {
             cur.nextNode.lock.unlock();
             cur.lock.unlock();
             return false;
@@ -110,29 +119,16 @@ class SafeSet<T extends Comparable<T>> implements Set<T> {
 
     @Override
     public boolean remove(T value) {
-        Node cur = head;
-        Node previousNode = head;
-        previousNode.lock.lock();
-        do {
+        Node cur = find(value);
 
-            cur.nextNode.lock.lock();
-            if (cur.value != null) {
-                previousNode.lock.unlock();
-            }
-            previousNode = cur;
-
-            if (cur.nextNode.nextNode != null && cur.nextNode.value.compareTo(value) < 0) {
-                cur = cur.nextNode;
-            } else {
-                break;
-            }
-        } while (true);
-
-        if (cur.nextNode.value != null && cur.nextNode.value.compareTo(value) == 0) {
+        if (!cur.isLast() && cur.nextNode.value.compareTo(value) == 0) {
+            cur.nextNode.lock.unlock();
             cur.nextNode = cur.nextNode.nextNode;
             cur.lock.unlock();
             return true;
         } else {
+            cur.lock.unlock();
+            cur.nextNode.lock.unlock();
             return false;
         }
     }
@@ -140,25 +136,14 @@ class SafeSet<T extends Comparable<T>> implements Set<T> {
 
     @Override
     public boolean contains(T value) {
-        Node cur = head;
-        Node previousNode = head;
-        previousNode.lock.lock();
-        do {
+        Node cur = find(value);
 
-            cur.nextNode.lock.lock();
-            if (cur.value != null) {
-                previousNode.lock.unlock();
-            }
-            previousNode = cur;
+        boolean result = (!cur.isLast() && cur.nextNode.value.compareTo(value) == 0);
 
-            if (cur.nextNode.nextNode != null && cur.nextNode.value.compareTo(value) < 0) {
-                cur = cur.nextNode;
-            } else {
-                break;
-            }
-        } while (true);
+        cur.nextNode.lock.unlock();
+        cur.lock.unlock();
 
-        return (cur.nextNode.value != null && cur.nextNode.value.compareTo(value) == 0);
+        return result;
     }
 
     @Override
